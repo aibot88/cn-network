@@ -1,0 +1,132 @@
+# =============================================================================
+# Dockerfile.cn-base  —  Mainland-China network ready base layer (COPY-PASTE)
+# =============================================================================
+# This file is NOT built directly. Copy the blocks you need into your
+#   Dockerfile  right AFTER the first FROM line and BEFORE any package install.
+#
+# Design notes:
+#   * Every block is idempotent and tolerant of missing files (Debian vs Ubuntu
+#     vs Alpine, deb822 vs legacy sources.list).
+#   * Never hardcode a registry mirror here — the host daemon / BuildKit
+#     mirrors should handle image names. This file only handles IN-CONTAINER
+#     package sources.
+#   * Keep `DEBIAN_FRONTEND=noninteractive` at image level so apt never blocks.
+#   * On Windows hosts, ensure copied `.sh` or wrapper files use LF line
+#     endings (`*.sh text eol=lf` in `.gitattributes`), or normalize via
+#     `sed -i 's/\r$//'` inside the image before running.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# BLOCK A — Debian / Ubuntu: switch APT to a domestic mirror, both formats
+# -----------------------------------------------------------------------------
+# Handles:
+#   - Debian 12+ / Ubuntu 24.04+ deb822  (/etc/apt/sources.list.d/*.sources)
+#   - Legacy one-line format            (/etc/apt/sources.list)
+#   - Keeps security/backports suites working after the host swap
+ARG APT_MIRROR=mirrors.aliyun.com
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai \
+    LANG=C.UTF-8
+
+RUN set -eux; \
+    if [ -d /etc/apt ]; then \
+      # --- deb822 (.sources) ------------------------------------------------
+      if ls /etc/apt/sources.list.d/*.sources >/dev/null 2>&1; then \
+        sed -i -E "s#(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|ports\.ubuntu\.com)#${APT_MIRROR}#g" \
+            /etc/apt/sources.list.d/*.sources; \
+      fi; \
+      # --- legacy one-line sources -----------------------------------------
+      if [ -f /etc/apt/sources.list ]; then \
+        sed -i -E "s#(deb\.debian\.org|security\.debian\.org|archive\.ubuntu\.com|security\.ubuntu\.com|ports\.ubuntu\.com)#${APT_MIRROR}#g" \
+            /etc/apt/sources.list; \
+      fi; \
+      # --- bootstrap CA so HTTPS mirrors work in minimal images ------------
+      if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then \
+        apt-get -o Acquire::Retries=5 update || true; \
+        apt-get -y -o Acquire::Retries=5 --no-install-recommends install ca-certificates || true; \
+      fi; \
+      apt-get -o Acquire::Retries=5 update; \
+    fi
+
+
+# -----------------------------------------------------------------------------
+# BLOCK B — Alpine: switch APK repositories
+# -----------------------------------------------------------------------------
+# RUN set -eux; \
+#     sed -i 's#https\?://dl-cdn\.alpinelinux\.org#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories; \
+#     sed -i 's#/alpine/alpine#/alpine#g' /etc/apk/repositories; \
+#     apk update && apk add --no-cache ca-certificates bash
+
+
+# -----------------------------------------------------------------------------
+# BLOCK C — Java: Maven settings + wrapper distributionUrl
+# -----------------------------------------------------------------------------
+# COPY maven-settings.xml /etc/maven/settings-cn.xml
+# ENV MAVEN_OPTS="-Dmaven.repo.local=/root/.m2/repository"
+# RUN set -eux; \
+#     if [ -f /src/mvnw ]; then \
+#       sed -i 's/\r$//' /src/mvnw /src/.mvn/wrapper/maven-wrapper.properties 2>/dev/null || true; \
+#       sed -i -E 's#https://repo\.maven\.apache\.org/dist/maven[23]/#https://maven.aliyun.com/repository/public/org/apache/maven/apache-maven/#g' \
+#           /src/.mvn/wrapper/maven-wrapper.properties || true; \
+#     fi
+# # then build (optionally with BuildKit cache `--mount=type=cache,target=/root/.m2`):
+# #   mvn -s /etc/maven/settings-cn.xml -Dmaven.test.skip=true -DskipTests package
+
+
+# -----------------------------------------------------------------------------
+# BLOCK D — Node: npm registry + binary download hosts
+# -----------------------------------------------------------------------------
+# ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com \
+#     ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+#     SASS_BINARY_SITE=https://npmmirror.com/mirrors/node-sass \
+#     PUPPETEER_DOWNLOAD_HOST=https://npmmirror.com/mirrors \
+#     PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright \
+#     npm_config_disturl=https://npmmirror.com/mirrors/node
+# RUN npm config set registry https://registry.npmmirror.com && npm ci
+
+
+# -----------------------------------------------------------------------------
+# BLOCK E — Python: pip / uv
+# -----------------------------------------------------------------------------
+# ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
+#     PIP_TRUSTED_HOST=mirrors.aliyun.com \
+#     UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
+#     PIP_DISABLE_PIP_VERSION_CHECK=1
+# RUN pip install --no-cache-dir -r requirements.txt
+
+
+# -----------------------------------------------------------------------------
+# BLOCK F — PHP: Composer mirror (also proxies GitHub dist archives)
+# -----------------------------------------------------------------------------
+# ENV COMPOSER_ALLOW_SUPERUSER=1
+# RUN composer config -g repos.packagist composer https://mirrors.aliyun.com/composer/ \
+#  && composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+
+# -----------------------------------------------------------------------------
+# BLOCK G — Ruby: Bundler mirror
+# -----------------------------------------------------------------------------
+# RUN bundle config mirror.https://rubygems.org https://mirrors.tuna.tsinghua.edu.cn/rubygems \
+#  && bundle install --jobs 4 --retry 3
+
+
+# -----------------------------------------------------------------------------
+# BLOCK H — Go / Rust
+# -----------------------------------------------------------------------------
+# RUN go env -w GOPROXY=https://goproxy.cn,direct GOSUMDB=sum.golang.google.cn
+# ENV CARGO_HOME=/usr/local/cargo
+# RUN mkdir -p $CARGO_HOME && printf '%s\n' \
+#     '[source.crates-io]' \
+#     'replace-with = "rsproxy-sparse"' \
+#     '[source.rsproxy-sparse]' \
+#     'registry = "sparse+https://rsproxy.cn/index/"' \
+#     > $CARGO_HOME/config.toml
+
+
+# -----------------------------------------------------------------------------
+# BLOCK I — Healthcheck that works in minimal images
+# -----------------------------------------------------------------------------
+# Avoid `curl` in HEALTHCHECK when the base image has no curl:
+#   HEALTHCHECK --interval=5s --timeout=3s --retries=30 \
+#     CMD wget -qO- http://127.0.0.1:8080/ >/dev/null 2>&1 || exit 1

@@ -1,0 +1,46 @@
+// =============================================================================
+// gradle-cn.gradle — Gradle init script: domestic repositories + wrapper hint
+// =============================================================================
+// Usage:
+//   gradle --init-script /path/to/gradle-cn.gradle build
+// or copy so it applies automatically:
+//   * macOS / Linux : ~/.gradle/init.d/cn.gradle
+//   * Windows       : %USERPROFILE%\.gradle\init.d\cn.gradle
+//
+// Also patch gradle/wrapper/gradle-wrapper.properties:
+//   distributionUrl=https\://mirrors.cloud.tencent.com/gradle/gradle-<VER>-bin.zip
+// (services.gradle.org is frequently unreachable; this is the usual silent hang.)
+// =============================================================================
+
+def CN_MAVEN = 'https://maven.aliyun.com/repository/public'
+def CN_PLUGIN = 'https://maven.aliyun.com/repository/gradle-plugin'
+def CN_GOOGLE = 'https://maven.aliyun.com/repository/google'
+def CN_CENTRAL_SNAPSHOT = 'https://maven.aliyun.com/repository/central-snapshot'
+
+settingsEvaluated { settings ->
+    settings.pluginManagement {
+        repositories {
+            maven { url CN_PLUGIN; allowInsecureProtocol = false }
+            maven { url CN_MAVEN }
+            maven { url CN_GOOGLE }
+            gradlePluginPortal()
+        }
+    }
+}
+
+allprojects {
+    buildscript {
+        repositories {
+            maven { url CN_PLUGIN }
+            maven { url CN_MAVEN }
+            maven { url CN_GOOGLE }
+        }
+    }
+    repositories {
+        maven { url CN_MAVEN }
+        maven { url CN_GOOGLE }
+        maven { url CN_CENTRAL_SNAPSHOT }
+        // keep the originals as a fallback, not the primary
+        mavenCentral()
+    }
+}

@@ -1,0 +1,25 @@
+HOST-SPECIFIC NETWORK & MIRROR GUIDANCE (MAINLAND CHINA — macOS / Linux / Windows):
+Direct connections to Docker Hub (`registry-1.docker.io`), `github.com`, and overseas package indexes may stall or time out. Apply the following rules during environment setup, dependency installation, and container builds:
+1. Docker images:
+   - Reuse locally cached images (`docker images`) first whenever a matching version tag already exists.
+   - Check host Docker `registry-mirrors` in the OS-appropriate config (`~/.docker/daemon.json` on macOS, `%USERPROFILE%\.docker\daemon.json` or `%ProgramData%\docker\config\daemon.json` on Windows, `/etc/docker/daemon.json` or `~/.config/docker/daemon.json` on Linux).
+   - If an image is not cached locally AND host Docker lacks `"registry-mirrors"`, pull/prefix in exact fallback order:
+     `docker.1ms.run/library/<image>:<tag>` -> `docker.1panel.live/library/<image>:<tag>` -> `docker.m.daocloud.io/library/<image>:<tag>`
+     (replace `library/` with `<org>/` for non-official images; if one mirror fails or lacks the tag, fall back to the next and re-tag to the canonical image name).
+2. Avoid direct `curl`, `wget`, `Invoke-WebRequest`, or `git clone` against `github.com` during automated builds. Prefer local sources, domestic package mirrors, or a read-only GitHub download prefix (`https://ghfast.top/`).
+3. Switch package managers to Mainland China mirrors BEFORE installing dependencies (both on the host and inside Dockerfiles):
+   - Debian/Ubuntu APT: replace `deb.debian.org` / `security.debian.org` / `archive.ubuntu.com` / `ports.ubuntu.com` with `mirrors.aliyun.com` or `mirrors.ustc.edu.cn` in `/etc/apt/sources.list` and `/etc/apt/sources.list.d/*.sources` BEFORE `apt-get update`.
+   - Alpine APK: rewrite `dl-cdn.alpinelinux.org` to `mirrors.aliyun.com/alpine` in `/etc/apk/repositories` BEFORE `apk add`.
+   - macOS Homebrew: set `HOMEBREW_API_DOMAIN`, `HOMEBREW_BOTTLE_DOMAIN`, and git remotes to USTC/TUNA/Aliyun mirrors (`scripts/pkg/brew-cn.sh`).
+   - Java Maven: configure `<mirror>` -> `https://maven.aliyun.com/repository/public` in `~/.m2/settings.xml` (`%USERPROFILE%\.m2\settings.xml` on Windows, or `-s maven-settings.xml` in builds) and rewrite `.mvn/wrapper/maven-wrapper.properties` `distributionUrl` before running `mvnw` / `mvnw.cmd`.
+   - PHP Composer: `composer config -g repos.packagist composer https://mirrors.aliyun.com/composer/`
+   - Python Pip / uv: use `https://mirrors.aliyun.com/pypi/simple/` (`pip.conf` on macOS/Linux, `%APPDATA%\pip\pip.ini` on Windows, or `-i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com`); set `HF_ENDPOINT=https://hf-mirror.com` for HuggingFace assets.
+   - Node npm / pnpm / yarn & RubyGems: write `registry=https://registry.npmmirror.com` (plus binary mirrors for electron/sass/sharp/playwright/puppeteer) to `~/.npmrc` (`%USERPROFILE%\.npmrc` on Windows), and set `bundle config mirror.https://rubygems.org https://mirrors.tuna.tsinghua.edu.cn/rubygems`.
+   - Go / Rust: set `GOPROXY=https://goproxy.cn,direct` and sparse Cargo index `sparse+https://rsproxy.cn/index/`.
+4. Container & build networking:
+   - Add `dns: ["223.5.5.5", "119.29.29.29"]` and `NO_PROXY: "127.0.0.1,localhost,::1,host.docker.internal,.local"` in `docker-compose.yml` / `compose.yml` services.
+   - Configure BuildKit DNS/mirrors via `/etc/buildkit/buildkitd.toml` on Linux or `docker buildx create --use --config scripts/docker/buildkitd.toml` across macOS, Windows, and Linux.
+   - On Windows hosts, keep shell scripts copied into Linux containers in LF format (`eol=lf`) so `RUN` / `ENTRYPOINT` never fail with `bash\r`.
+   - Disable non-essential external update/marketplace/telemetry checks via configuration without modifying application logic or security settings.
+5. On-demand proxy fallback:
+   - Never set global system proxies without `NO_PROXY` covering `127.0.0.1,localhost,::1,host.docker.internal`. If a single overseas command has no domestic mirror and an on-demand mihomo controller is available, wrap only that single command (`mihomo_ctl.sh run <cmd>` on macOS/Linux/WSL/Git Bash, or `mihomo_ctl.ps1 run <cmd>` on Windows PowerShell).

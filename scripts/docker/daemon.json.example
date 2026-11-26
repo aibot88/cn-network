@@ -1,0 +1,37 @@
+{
+  "_comment_1": "Template only. Use scripts/setup_docker_cn.sh (macOS/Linux/WSL/Git Bash) or scripts/setup_docker_cn.ps1 (Windows PowerShell) to merge safely.",
+  "_comment_2": "Target paths: Linux=/etc/docker/daemon.json, macOS=~/.docker/daemon.json, Windows=%USERPROFILE%\\.docker\\daemon.json (or %ProgramData%\\docker\\config\\daemon.json).",
+  "_comment_3": "Never overwrite the real file directly: it would drop host-specific keys such as runtimes/data-root/builder. If configuring proxies, always include loopback & host.docker.internal in no-proxy.",
+
+  "dns": ["223.5.5.5", "119.29.29.29"],
+
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://docker.1panel.live",
+    "https://docker.m.daocloud.io"
+  ],
+
+  "max-concurrent-downloads": 6,
+  "max-concurrent-uploads": 4,
+  "max-download-attempts": 5,
+
+  "mtu": 1400,
+
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "50m",
+    "max-file": "3"
+  },
+
+  "features": {
+    "buildkit": true
+  },
+
+  "insecure-registries": [],
+
+  "_proxies_example": {
+    "http-proxy": "http://127.0.0.1:7890",
+    "https-proxy": "http://127.0.0.1:7890",
+    "no-proxy": "localhost,127.0.0.1,::1,host.docker.internal,*.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  }
+}

@@ -1,0 +1,32 @@
+# =============================================================================
+# cargo-cn.toml — Rust crates mirror (sparse index) + rustup dist mirror
+# =============================================================================
+# Install to:
+#   * macOS / Linux : ~/.cargo/config.toml         (or $CARGO_HOME/config.toml)
+#   * Windows       : %USERPROFILE%\.cargo\config.toml
+#
+# Also set for rustup (toolchain downloads):
+#   # macOS / Linux (bash/zsh):
+#   export RUSTUP_DIST_SERVER=https://mirrors.ustc.edu.cn/rust-static
+#   export RUSTUP_UPDATE_ROOT=https://mirrors.ustc.edu.cn/rust-static/rustup
+#   # Windows (PowerShell):
+#   $env:RUSTUP_DIST_SERVER="https://mirrors.ustc.edu.cn/rust-static"
+#   $env:RUSTUP_UPDATE_ROOT="https://mirrors.ustc.edu.cn/rust-static/rustup"
+# =============================================================================
+
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[registries.rsproxy]
+index = "sparse+https://rsproxy.cn/index/"
+
+[net]
+git-fetch-with-cli = true
+retry = 5
+
+[http]
+timeout = 60
+multiplexing = true

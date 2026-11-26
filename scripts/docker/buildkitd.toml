@@ -1,0 +1,43 @@
+# BuildKit daemon configuration for Mainland China hosts (Linux / macOS / Windows).
+#
+# Usage:
+#   * Linux standalone BuildKit:
+#       copy to /etc/buildkit/buildkitd.toml  (then: systemctl restart buildkit)
+#   * Cross-platform (macOS / Windows Docker Desktop / Linux buildx):
+#       docker buildx create --use --name cn-builder --config scripts/docker/buildkitd.toml
+#
+# Why this file exists:
+#   BuildKit runs its OWN resolver and does NOT read Linux /etc/docker/daemon.json "dns".
+#   Without [dns] below, `RUN apt-get update` / `RUN mvn` often fail with
+#   "Temporary failure in name resolution" even though `docker pull` works.
+
+debug = false
+
+# ---------------------------------------------------------------- DNS
+[dns]
+  nameservers = ["223.5.5.5", "119.29.29.29"]
+
+# ------------------------------------------------------- Registry mirrors
+# NOTE: registry mirrors here are only used by BuildKit builds.
+#       Plain `docker pull` uses daemon.json instead. Keep both in sync.
+
+[registry."docker.io"]
+  mirrors = [
+    "docker.1ms.run",
+    "docker.1panel.live",
+    "docker.m.daocloud.io",
+  ]
+
+# Non-Docker-Hub registries are NOT covered by daemon "registry-mirrors".
+# Uncomment only the mirrors that you have verified reachable on this host;
+# a wrong/dead mirror entry slows every build down.
+#
+# [registry."ghcr.io"]
+#   mirrors = ["ghcr.nju.edu.cn"]
+#
+# [registry."quay.io"]
+#   mirrors = ["quay.mirrors.ustc.edu.cn"]
+
+# --------------------------------------------------------------- Workers
+[worker.oci]
+  max-parallelism = 4

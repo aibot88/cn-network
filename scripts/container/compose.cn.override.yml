@@ -1,0 +1,48 @@
+# =============================================================================
+# compose.cn.override.yml — Mainland-China runtime network override
+# =============================================================================
+# Merge into your compose file across macOS, Linux, and Windows:
+#   docker compose -p <project> \
+#     -f docker-compose.yml \
+#     -f /path/to/cn-network/scripts/container/compose.cn.override.yml up -d
+#
+# or paste the relevant keys (the x-cn-network anchor) into each service.
+#
+# IMPORTANT: this file only touches NETWORKING. It never modifies application
+# business logic or security settings.
+# =============================================================================
+
+x-cn-network: &cn-network
+  # systemd-resolved on Linux may hand containers an unreachable 127.0.0.53 stub.
+  dns:
+    - 223.5.5.5
+    - 119.29.29.29
+  dns_search: []
+  # Reach host-side services uniformly across Linux, macOS, and Windows.
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  # Prevent proxy env vars from capturing loopback or host-gateway traffic.
+  environment:
+    NO_PROXY: "127.0.0.1,localhost,::1,host.docker.internal,.local"
+    no_proxy: "127.0.0.1,localhost,::1,host.docker.internal,.local"
+    TZ: "Asia/Shanghai"
+  # IPv6-first hangs: containers that resolve AAAA and then stall ~10s.
+  sysctls:
+    net.ipv6.conf.all.disable_ipv6: "1"
+    net.ipv6.conf.default.disable_ipv6: "1"
+  # Overlay/VPN MTU too large -> small requests ok, large responses stall.
+  # Uncomment if you observe hangs on big payloads:
+  # networks:
+  #   default:
+  #     driver_opts:
+  #       com.docker.network.driver.mtu: "1400"
+
+services:
+  db:
+    <<: *cn-network
+
+  redis:
+    <<: *cn-network
+
+  app:
+    <<: *cn-network
